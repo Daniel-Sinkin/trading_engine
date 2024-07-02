@@ -17,7 +17,7 @@ GIGABYTE = MEGABYTE * 1024
 class DataProvider(ABC):
     def __init__(self) -> None:
         self.load_data()
-        t0 = time.perf_counter()
+        t0: float = time.perf_counter()
         self._candles_1m: pd.DataFrame = DataProvider.create_candles_from_ticks(
             self._data, "min"
         )
@@ -30,21 +30,28 @@ class DataProvider(ABC):
         self._candles_1d: pd.DataFrame = DataProvider.create_candles_from_ticks(
             self._data, "d"
         )
-        t1 = time.perf_counter()
+        t1: float = time.perf_counter()
         print(
-            f"Creating {self.n_candles_total} candles took {t1-t0:.2f} seconds ({self.n_candles_total/(t1-t0):.2f} cps)"
+            f"Creating {self.n_candles_total_until_timestamp()} candles took {t1-t0:.2f} seconds ({self.n_candles_total_until_timestamp()/(t1-t0):.2f} cps)"
         )
 
     def __len__(self) -> int:
         return len(self._data)
 
-    @property
-    def n_candles_total(self) -> int:
+    def n_candles_total_until_timestamp(self, ts: Optional[dt.datetime] = None) -> int:
         return (
-            len(self._candles_1m)
-            + len(self._candles_5m)
-            + len(self._candles_1h)
-            + len(self._candles_1d)
+            len(
+                self._candles_1m.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+            )
+            + len(
+                self._candles_5m.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+            )
+            + len(
+                self._candles_1h.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+            )
+            + len(
+                self._candles_1d.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+            )
         )
 
     @abstractmethod
@@ -71,8 +78,16 @@ class DataProvider(ABC):
         return self._data.loc[t0:t1].copy()
 
     def get_candles_range(
-        self, t0: dt.datetime, t1: dt.datetime, freq: str
+        self,
+        t0: Optional[dt.datetime] = None,
+        t1: Optional[dt.datetime] = None,
+        freq: str = "1m",
     ) -> pd.DataFrame:
+        if t0 is None:
+            t0 = self.min_ts
+        if t1 is None:
+            t1 = self.max_ts
+
         if freq == "1m":
             return self._candles_1m.loc[t0:t1].copy()
         elif freq == "5m":
@@ -81,6 +96,34 @@ class DataProvider(ABC):
             return self._candles_1h.loc[t0:t1].copy()
         elif freq == "1d":
             return self._candles_1d.loc[t0:t1].copy()
+        else:
+            raise ValueError("Unsupported frequency")
+
+    def get_last_n_candles(self, ts: dt.datetime, n: int, freq: str) -> pd.DataFrame:
+        if freq == "1m":
+            return (
+                self._candles_1m.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+                .iloc[-n:]
+                .copy()
+            )
+        elif freq == "5m":
+            return (
+                self._candles_5m.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+                .iloc[-n:]
+                .copy()
+            )
+        elif freq == "1h":
+            return (
+                self._candles_1h.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+                .iloc[-n:]
+                .copy()
+            )
+        elif freq == "1d":
+            return (
+                self._candles_1d.loc[: ts or self.max_ts + dt.timedelta(milliseconds=1)]
+                .iloc[-n:]
+                .copy()
+            )
         else:
             raise ValueError("Unsupported frequency")
 
@@ -104,10 +147,48 @@ class FileDataProvider(DataProvider):
         assert self._data.index.is_monotonic_increasing
 
 
-class SyntheticDataProvider_NaiveStep(DataProvider):
-    def __init__(self, seed: int, n_ticks: int, *args, **kwargs) -> None:
+class SyntheticDataProvider_NaiveStepRange(DataProvider):
+    def __init__(
+        self, t0: dt.datetime, t1: dt.datetime, n_ticks: int, seed=0x2024_07_02
+    ):
+        self._t0 = t0
+        self._t1 = t1
         self._seed = seed
         self._n_ticks = n_ticks
+        super().__init__()
+
+    def load_data(self) -> None:
+        # Calculate the time intervals
+        total_duration = (self._t1 - self._t0).total_seconds()
+        time_intervals = np.linspace(0, total_duration, self._n_ticks)
+
+        # Generate the timestamps
+        timestamps = [
+            self._t0 + dt.timedelta(seconds=interval) for interval in time_intervals
+        ]
+
+        # Generate synthetic prices
+        prices = generate_synthetic_prices_naive_step(self._n_ticks, 1.31)
+        bid = prices - 0.05
+        ask = prices + 0.05
+
+        times_dtindex: DatetimeIndex = pd.DatetimeIndex(timestamps)
+
+        ticks_data = pd.DataFrame(
+            {
+                "t": times_dtindex,
+                "bid": bid.round(5).values.reshape(-1),
+                "ask": ask.round(5).values.reshape(-1),
+            }
+        )
+        ticks_data.set_index("t", inplace=True)
+        self._data = ticks_data
+
+
+class SyntheticDataProvider_NaiveStep(DataProvider):
+    def __init__(self, seed: int, n_ticks: int, *args, **kwargs) -> None:
+        self._seed: int = seed
+        self._n_ticks: int = n_ticks
         super().__init__(*args, **kwargs)
 
     def load_data(self) -> None:
