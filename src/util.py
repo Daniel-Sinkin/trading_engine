@@ -1,8 +1,57 @@
+import datetime as dt
+from datetime import datetime
+from typing import cast
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 PERCENTAGE = 1e-2
+
+
+def plot_candles(candles_1d, ticks_ts, mid_prices):
+    for t, row in candles_1d.iterrows():
+        t = cast(dt.datetime, t)
+        t_right = t + dt.timedelta(days=1)
+        t_mid = t + (t_right - t) / 2
+        is_buy = row["close"] > row["open"]
+
+        if is_buy:
+            xy = (t, row["open"])
+            color = "cyan"
+            height = row["close"] - row["open"]
+        else:
+            xy = (t, row["close"])
+            color = "pink"
+            height = row["open"] - row["close"]
+        width = t_right - t
+
+        plt.gca().add_patch(
+            plt.Rectangle(
+                xy=xy, width=width, height=height, color=color, alpha=0.7, zorder=5
+            )
+        )
+        plt.plot(
+            [t, t_right], [row["high"], row["high"]], color="black", alpha=0.4, zorder=5
+        )
+        plt.plot(
+            [t, t_right], [row["low"], row["low"]], color="black", alpha=0.4, zorder=5
+        )
+        plt.plot(
+            [t_mid, t_mid],
+            [row["low"], row.open if is_buy else row.close],
+            color="black",
+            alpha=0.4,
+            zorder=1,
+        )
+        plt.plot(
+            [t_mid, t_mid],
+            [row["high"], row.close if is_buy else row.open],
+            color="black",
+            alpha=0.4,
+            zorder=1,
+        )
+    plt.plot(ticks_ts, mid_prices, alpha=0.3)
 
 
 def generate_synthetic_prices_naive_step(
