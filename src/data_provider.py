@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas import DatetimeIndex
 
-from src.util import generate_synthetic_prices_naive_step
+from .util import generate_synthetic_prices_naive_step
 
 KILOBYTE = 1024
 MEGABYTE = KILOBYTE * 1024
