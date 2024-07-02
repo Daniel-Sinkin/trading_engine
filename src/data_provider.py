@@ -168,9 +168,11 @@ class SyntheticDataProvider_NaiveStepRange(DataProvider):
         ]
 
         # Generate synthetic prices
-        prices = generate_synthetic_prices_naive_step(self._n_ticks, 1.31)
-        bid = prices - 0.05
-        ask = prices + 0.05
+        prices = generate_synthetic_prices_naive_step(
+            self._n_ticks, 1.31, seed=self._seed
+        )
+        bid = prices - 0.001
+        ask = prices + 0.001
 
         times_dtindex: DatetimeIndex = pd.DatetimeIndex(timestamps)
 
