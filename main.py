@@ -2,17 +2,18 @@ import datetime as dt
 import multiprocessing as mp
 import time
 from multiprocessing.managers import BaseManager
+from typing import NoReturn
 
 from src.broker import BacktestingBroker
 from src.data_provider import SyntheticDataProvider_NaiveStepRange
 from src.technical_analysis import ewma
 
 
-def run_backtesting_broker(broker: BacktestingBroker):
+def run_backtesting_broker(broker: BacktestingBroker) -> None:
     broker.start_running()
 
 
-def print_broker_time(broker: BacktestingBroker):
+def print_broker_time(broker: BacktestingBroker) -> NoReturn:
     while True:
         candles = broker.get_last_n_candles(100, freq="1d")
         ema = ewma(candles["close"].values, 14)
