@@ -37,12 +37,13 @@ class BrokerManager(ABC):
 class BacktestingBroker(BrokerManager):
     def __init__(
         self,
-        supported_symbols: list[str],
         starting_time: dt.datetime,
+        stop_time: dt.datetime,
         data_provider: DataProvider,
+        second_skip_per_iteration: float = 1.0,
+        min_seconds_per_iteration: float = 0.1,
     ):
         super().__init__(data_provider)
-        self._symbols = supported_symbols
         self._orders = pd.DataFrame(
             columns=["id", "symbol", "volume", "is_buy", "limit_price", "status"]
         )
@@ -50,6 +51,10 @@ class BacktestingBroker(BrokerManager):
             columns=["id", "symbol", "volume", "is_buy", "entry_price"]
         )
         self.time: dt.datetime = starting_time
+        self.stop_time: dt.datetime = stop_time
+
+        self.second_skip_per_iteration: float = second_skip_per_iteration
+        self.min_seconds_per_iteration: float = min_seconds_per_iteration
 
         self.events: list[dict[str, any]] = []
 
@@ -94,15 +99,21 @@ class BacktestingBroker(BrokerManager):
     def get_time(self) -> dt.datetime:
         return self.time
 
-    def start_running(self, time_multiplier: float) -> None:
+    def start_running(self) -> None:
         self.is_running = True
-        t0 = time.time()
         while self.is_running:
-            self._handle_events()
-
-            t_delta = time.time() - t0
-            self.time += dt.timedelta(seconds=t_delta * time_multiplier)
             t0 = time.time()
+            self._handle_events()
+            self.time += dt.timedelta(seconds=self.second_skip_per_iteration)
+
+            t1 = time.time()
+            t_rem = self.second_skip_per_iteration - (t1 - t0)
+            if t_rem > 0:
+                time.sleep(t_rem)
+
+            if self.time > self.stop_time:
+                self.is_running = False
+        print(f"Reached stop time of {self.stop_time}... Stopping broker.")
 
     def get_current_bid_ask(self) -> Optional[tuple[float, float]]:
         return self._data_provider.get_bid_ask_price_at_timestamp(self.time)
@@ -110,5 +121,5 @@ class BacktestingBroker(BrokerManager):
     def get_total_number_of_candles(self) -> int:
         return self._data_provider.n_candles_total_until_timestamp(self.time)
 
-    def get_last_n_candles(self, n: int) -> pd.DataFrame:
-        return self._data_provider.get_last_n_candles(self.time, n)
+    def get_last_n_candles(self, n: int, freq: str = "1m") -> pd.DataFrame:
+        return self._data_provider.get_last_n_candles(self.time, n, freq=freq)
