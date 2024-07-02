@@ -5,7 +5,27 @@ import pandas as pd
 PERCENTAGE = 1e-2
 
 
-def generate_synthetic_data_heston(
+def generate_synthetic_prices_naive_step(
+    n=2520,
+    p0=1.31,
+    step_size_min=-1e-3,
+    step_size_max=1e-3,
+    seed: int = 0x2024_07_02,
+) -> pd.DataFrame:
+    """
+    Generate synthetic forex data using a naive step model.
+    """
+    rng = np.random.default_rng(seed)
+    S = np.zeros(n)
+    S[0] = p0
+
+    for t in range(1, n):
+        S[t] = S[t - 1] + rng.uniform(step_size_min, step_size_max)
+
+    return pd.DataFrame({"Price": S})
+
+
+def generate_synthetic_prices_and_vola_heston(
     n=2520,
     p0=1.31,
     average_return_rate=2e-4,
@@ -47,7 +67,7 @@ def generate_synthetic_data_heston(
 
 
 def main() -> None:
-    synthetic_data: pd.DataFrame = generate_synthetic_data_heston(n=252 * 10)
+    synthetic_data: pd.DataFrame = generate_synthetic_prices_and_vola_heston(n=252 * 10)
 
     fig, ax = plt.subplots(2, 1, figsize=(10, 8))
 
